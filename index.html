@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+    <title>walker</title>
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link type="text/css" rel="stylesheet" href="main.css">
+</head>
+
+<body>
+
+
+    <script type="module">
+
+        let container = document.createElement('div');
+        document.body.appendChild(container);
+
+        const info = document.createElement('div');
+        info.style.position = 'absolute';
+        info.style.top = '10px';
+        info.style.width = '100%';
+        info.style.textAlign = 'center';
+        info.innerHTML = 'experiments in webxr - <a href="https://github.com/anotherjesse/3walker/">source</a> | powered by  <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> | inspired by Tweet by <a href="https://twitter.com/Pavel_Oliva/status/1481734929058779141">Pavel Oliva</a>';
+        container.appendChild(info);
+
+        import * as THREE from './build/three.module.js';
+        import { VRButton } from './examples/jsm/webxr/VRButton.js';
+
+        let mesh;
+        let camera, scene, renderer;
+        let offsets = {}
+
+        const cols = 8;
+        const rows = 100;
+        const boxSize = 0.225;
+        const boxGap = 0.025;
+        const boxThickness = 0.025;
+        const dummy = new THREE.Object3D();
+
+        init()
+        animate()
+
+        function init() {
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(5, 5, 5);
+            camera.lookAt(0, 0, 0);
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color('black');
+
+            const geometry = new THREE.BoxGeometry(boxSize, boxThickness, boxSize);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0x808080,
+                opacity: 1
+            });
+
+            mesh = new THREE.InstancedMesh(geometry, material, cols * rows);
+            mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // will be updated every frame
+
+            scene.add(mesh);
+
+            renderer = new THREE.WebGLRenderer({});
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true
+            document.body.appendChild(VRButton.createButton(renderer));
+
+            document.body.appendChild(renderer.domElement);
+            document.body.style.margin = 0;
+            document.body.style.overflow = 'hidden';
+            renderer.setPixelRatio(window.devicePixelRatio);
+
+
+            window.addEventListener('resize', onWindowResize);
+            for (let col = 0; col < cols; col++) {
+                for (let row = 0; row < rows; row++) {
+                    offsets[col + row * cols] = {
+                        x: Math.sin(col * 13 + row * 17) * boxGap * 0.5,
+                        y: Math.cos(col * 23 + row * 11) * boxThickness,
+                        z: Math.cos(col * 11 + row * 31) * boxGap * 0.5
+                    };
+                }
+            }
+            console.log(offsets)
+        }
+
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            renderer.setAnimationLoop(render);
+        }
+
+        function render() {
+            if (mesh) {
+
+                const time = Date.now() * 0.001;
+
+                const cameraPosition = new THREE.Vector3();
+                camera.getWorldPosition(cameraPosition);
+
+                let offset = -(cols / 2) * boxSize * 1.01
+
+                // how close to the camera to make the boxes start appearing
+                const minz = 0.5;
+                const maxz = 2;
+                const scale = 1 / (maxz - minz)
+
+                for (let col = 0; col < cols; col++) {
+                    for (let row = 0; row < rows; row++) {
+                        let i = col + row * cols;
+
+                        let x = offset + col * (boxSize + boxGap);
+                        if (row % 2 === 0) {
+                            x += (boxSize + boxGap) / 2;
+                        }
+                        let z = offset + row * (boxSize + boxGap);
+
+                        let y = -10000;
+
+                        if (z - minz < cameraPosition.z) {
+                            y = 0;
+                        } else if (z - maxz < cameraPosition.z) {
+                            y = -10 + scale * (cameraPosition.z - (z - maxz) + Math.abs(offsets[i].z) * 5) * 10;
+                            if (y > 0) y = 0;
+                        }
+
+                        dummy.position.set(x + offsets[i].x, y + offsets[i].y, z + offsets[i].z);
+                        dummy.updateMatrix();
+                        mesh.setMatrixAt(i, dummy.matrix);
+                    }
+                }
+
+                mesh.instanceMatrix.needsUpdate = true;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+    </script>
+</body>
+
+</html>
